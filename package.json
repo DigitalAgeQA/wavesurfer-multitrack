@@ -1,13 +1,14 @@
 {
-  "name": "wavesurfer-multitrack",
+  "name": "daqa-wavesurfer-multitrack",
   "version": "0.5.0",
   "license": "BSD-3-Clause",
-  "author": "katspaugh",
-  "description": "Multritrack super-plugin for wavesurfer.js",
+  "author": "katspaugh && daqajake",
+  "description": "Multritrack super-plugin for wavesurfer.js - modified for DAQA use",
   "homepage": "https://wavesurfer.xyz/examples/?multitrack.js",
   "keywords": [
     "wavesurfer",
-    "multi-track"
+    "multi-track",
+    "DAQA"
   ],
   "type": "module",
   "files": [
