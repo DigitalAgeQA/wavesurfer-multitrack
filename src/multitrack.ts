@@ -17,7 +17,7 @@ export type TrackId = string | number
 
 type SingleTrackOptions = Omit<
   WaveSurferOptions,
-  'container' | 'minPxPerSec' | 'duration' | 'cursorColor' | 'cursorWidth' | 'interact' | 'hideScrollbar'
+  'container' | 'minPxPerSec' | 'cursorColor' | 'cursorWidth' | 'interact' | 'hideScrollbar'
 >
 
 export type TrackOptions = {
@@ -143,7 +143,7 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
 
   private initDurations(durations: number[]) {
     this.durations = durations
-
+    this.tracks.forEach((t, idx) => {t.options?.duration ? durations[idx] = t.options?.duration : null})
     this.maxDuration = this.tracks.reduce((max, track, index) => {
       return Math.max(max, track.startPosition + durations[index])
     }, 0)
@@ -166,14 +166,17 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
 
     audio.crossOrigin = 'anonymous'
 
-    if (track.url) {
+    if (track.url !== undefined) {
       audio.src = track.url
     }
 
     if (track.volume !== undefined) audio.volume = track.volume
 
     return new Promise<typeof audio>((resolve) => {
-      if (!audio.src) return resolve(audio)
+        if (!audio.src) return resolve(audio)
+        if (isPlaceholderTrack) {
+            return resolve(audio)
+        }
       ;(audio as HTMLAudioElement).addEventListener('loadedmetadata', () => resolve(audio), { once: true })
     })
   }
@@ -337,7 +340,9 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
 
       this.subscriptions.push(
         envelope.on('volume-change', (volume) => {
-          this.emit('volume-change', { id: track.id, volume })
+            if (!isNaN(volume)) {
+                this.emit('volume-change', { id: track.id, volume })
+            }
         }),
 
         envelope.on('points-change', (points) => {
@@ -369,7 +374,9 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
         }),
 
         ws.on('decode', () => {
-          envelope.setVolume(track.volume ?? 1)
+            if (!isNaN(track.volume as number)) {
+                envelope.setVolume(track.volume ?? 1)
+            }
         }),
       )
     }
@@ -544,6 +551,54 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
     this.rendering.setContainerOffsets()
   }
 
+  private initContainer(track: TrackOptions, index: number) {
+    const container = document.createElement('div')
+    container.style.position = 'relative'
+
+    this.options.container.firstChild?.firstChild?.insertBefore(container, this.options.container.firstChild?.firstChild?.lastChild)
+    this.rendering.containers.splice(index, 0, container)
+  }
+
+  public insertTrack(track: TrackOptions, index: number) {
+    let isPlaceholderIdx = false
+    if (index == -1) {
+        isPlaceholderIdx = true
+        console.log(this.tracks.findIndex(t => t.id == PLACEHOLDER_TRACK.id))
+        index = this.tracks.findIndex(t => t.id == PLACEHOLDER_TRACK.id)
+    }
+    console.log("New Track Index: ", index)
+    this.tracks.splice(index, 0, track)
+    this.initAudio(track).then((audio) => {
+        this.audios.splice(index, 0, audio)
+        const duration = this.durations[index] = typeof track.options?.duration === 'number' ? track.options.duration : audio.duration
+        this.durations.splice(index, 0, duration)
+        this.maxDuration = this.tracks.reduce((max, track, index) => {
+            return Math.max(max, track.startPosition + this.durations[index])
+        }, 0)
+        this.initContainer(track, index)
+        if (isPlaceholderIdx) {
+            this.wavesurfers.splice(index,0, this.initWavesurfer(track, index))
+        } else {
+            this.initWavesurfer(track, index)
+        }
+        
+        if (this.options?.trackBorderColor) {
+            const borderDiv = document.createElement('div')
+            borderDiv.setAttribute('style', `width: 100%; height: 2px; background-color: ${this.options.trackBorderColor}`)
+            this.rendering.containers[index].insertAdjacentElement('afterend', borderDiv)
+        }
+        if (track.draggable) {
+            console.log("THIS TRACK IS DRAGGABLE")
+          const unsubscribe = initDragging(
+            this.rendering.containers[index],
+            (delta: number) => this.onDrag(index, delta),
+            this.options?.rightButtonDrag,
+          )
+          this.wavesurfers[index].once('destroy', unsubscribe)
+        }
+    })
+  } 
+
   public addTrack(track: TrackOptions) {
     const index = this.tracks.findIndex((t) => t.id === track.id)
     if (index !== -1) {
@@ -551,7 +606,8 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
 
       this.initAudio(track).then((audio) => {
         this.audios[index] = audio
-        this.durations[index] = audio.duration
+        // this.durations[index] = audio.duration
+        this.durations[index] = typeof track.options?.duration === 'number' ? track.options.duration : audio.duration
         this.initDurations(this.durations)
 
         const container = this.rendering.containers[index]
@@ -569,6 +625,8 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
 
         this.emit('canplay')
       })
+    } else {
+        this.insertTrack(track, -1);
     }
   }
 
@@ -593,7 +651,9 @@ class MultiTrack extends EventEmitter<MultitrackEvents> {
   }
 
   public setTrackVolume(index: number, volume: number) {
-    ;(this.envelopes[index] || this.wavesurfers[index])?.setVolume(volume)
+    if (!isNaN(volume)) {
+        ;(this.envelopes[index] || this.wavesurfers[index])?.setVolume(volume)
+    }
   }
 
   public setTrackStartPosition(index: number, value: number) {

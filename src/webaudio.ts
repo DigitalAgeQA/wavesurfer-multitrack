@@ -157,8 +157,10 @@ class WebAudioPlayer {
     return this.gainNode.gain.value
   }
   set volume(value) {
-    this.gainNode.gain.value = value
-    this.emitEvent('volumechange')
+    if (!isNaN(value)) {
+        this.gainNode.gain.value = value
+        this.emitEvent('volumechange')
+    }
   }
 
   get muted() {

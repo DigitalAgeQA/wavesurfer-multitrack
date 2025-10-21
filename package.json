@@ -24,7 +24,8 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist && tsc && rollup -c",
+    "build": "del dist && tsc && rollup -c",
+    "build:win": "del /q dist && tsc && rollup -c",
     "build:dev": "tsc -w --target ESNext",
     "deploy": "yarn build && yarn docs",
     "prepublishOnly": "npm run build",
